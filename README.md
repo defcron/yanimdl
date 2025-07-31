@@ -11,10 +11,7 @@ Look at the contents of the two .sh scripts with the shortest filenames for full
 ```bash
 # Copy or symlink these scripts into a folder that's in your $PATH (yanimdl.sh, yanimdl.dl.sh, yanimdl-lite.sh), then you can use them.
 
-# Standard version with the fancy optimized downloader script integration, augmented by Claude. Uses the `yanimdl.dl.sh` script internally, and expects it to be in your $PATH.
+# Get images from links in the certain kind of .json input files. Uses the `yanimdl.dl.sh` script internally, and expects it to be in the current directory or in your $PATH. Consider putting both `yanimdl.sh` and `yanimdl.dl.sh` in a location that's in your $PATH for ease of use.
 yanimdl.sh input-file-with-image-links-1.json input-file-with-image-links-2.json
-
-# Simpler, slower version, with simple download logic and probably will deliver a few more duplicate images than the standard version.
-yanimdl-lite.sh input-file-with-image-links-1.json input-file-with-image-links-2.json
 ```
 

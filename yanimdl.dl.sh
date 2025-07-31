@@ -1,14 +1,16 @@
 #!/bin/bash
 # yanimdl.dl.sh - Bulletproof Image Downloader - Maximum stealth image downloading
 # Handles bot detection, rate limiting, and hotlinking protection
+#
+# Written mostly by Claude Sonnet 4 (claude.ai web chat version llm), with some adjustments by defcron
 
 set -euo pipefail
 
 # Configuration
-readonly MAX_CONCURRENT=${MAX_CONCURRENT:-4}
+readonly MAX_CONCURRENT=${MAX_CONCURRENT:-19}
 readonly MIN_DELAY=${MIN_DELAY:-1}
-readonly MAX_DELAY=${MAX_DELAY:-5}
-readonly MAX_RETRIES=${MAX_RETRIES:-5}
+readonly MAX_DELAY=${MAX_DELAY:-3}
+readonly MAX_RETRIES=${MAX_RETRIES:-3}
 readonly TIMEOUT=${TIMEOUT:-30}
 
 if [[ -z "${USER_AGENTS+x}" ]]; then
@@ -78,8 +80,8 @@ download_image_stealth() {
         --max-redirs 30 \
         --connect-timeout 30 \
         --max-time $TIMEOUT \
-        --retry 3 \
-        --retry-delay 2 \
+        --retry $MAX_RETRIES \
+        --retry-delay 4 \
         --retry-max-time 60 \
         -H "User-Agent: $ua" \
         -H "Accept: image/webp,image/apng,image/png,image/jpeg,image/gif,image/svg+xml,image/*,video/mp4,video/x-matroska,video/x-msvideo,video/*,*/*;q=0.8" \
@@ -101,7 +103,7 @@ download_image_stealth() {
     # Fallback to wget with enhanced headers
     if wget --quiet \
         --timeout=$TIMEOUT \
-        --tries=3 \
+        --tries=4 \
         --max-redirect=30 \
         --trust-server-names \
         --no-check-certificate \
@@ -134,8 +136,8 @@ process_url() {
     local url="$1"
     
     # Generate safe filename
-    local filename=$(basename "$url" | sed 's/[^a-zA-Z0-9._-]/_/g' | head -c 100)
-    [[ -z "$filename" || "$filename" == "_" ]] && filename="image_$(date +%s)_$RANDOM"
+    local filename="$(basename "$url" | sed 's/[^a-zA-Z0-9._]/_/g' | head -c 100 | sed "s/'/_/g")"
+    [[ -z "$filename" || "$filename" == "_" ]] && filename="image_$(date +%s)_${RANDOM}${RANDOM}${RANDOM}"
     
     ## Add extension if missing
     #if [[ "$filename" != *.* ]]; then
@@ -145,25 +147,24 @@ process_url() {
 
     # Don't assume extensions - let exiftool fix them later
     # Just ensure we have some filename
-    [[ -z "$filename" || "$filename" == "_" ]] && filename="download_$(date +%s)_$RANDOM"
+    [[ -z "$filename" || "$filename" == "_" ]] && filename="download_$(date +%s)_${RANDOM}${RANDOM}${RANDOM}"
     
     # Rename if already exists
     if [[ -f "$filename" ]]; then
-	new_filename="${filename}.1"
+	local new_filename="${filename}_${RANDOM}${RANDOM}${RANDOM}"
         echo "⏭️  Renaming: $filename (exists) -> $new_filename"
 	filename="${new_filename}"
-        #return 0
     fi
     
-    log "📥 Downloading: $filename"
+    log "📥 Downloading: $url -> $filename"
     
     if download_image_stealth "$url" "$filename"; then
         local size=$(stat -f%z "$filename" 2>/dev/null || stat -c%s "$filename" 2>/dev/null || echo "unknown")
-        echo "✅ Success: $filename ($size bytes)"
+        echo "✅ Success: $url -> $filename ($size bytes)"
         return 0
     else
-        echo "❌ Failed: $url"
-        [[ -f "$filename" ]] && rm -f "$filename"  # Clean up partial downloads
+        echo "❌ Failed: $url -> $filename"
+        [[ -f "$filename" ]] && rm -f "./$filename"  # Clean up partial downloads
         return 1
     fi
 }
@@ -182,7 +183,7 @@ process_url_list() {
     export MAX_RETRIES TIMEOUT
     export USER_AGENTS REFERERS MIN_DELAY MAX_DELAY # export arrays properly
     
-    cat "$url_file" | xargs -P$MAX_CONCURRENT -I{} bash -c '
+    cat "$url_file" | sed "s/'/_/g" | xargs -P$MAX_CONCURRENT -I{} bash -c '
         process_url "$@"
         sleep $(shuf -i '"$MIN_DELAY"'-'"$MAX_DELAY"' -n 1)
     ' _ {}
@@ -203,11 +204,13 @@ analyze_failures() {
     echo "=== FAILURE ANALYSIS ==="
     
     # Extract domains from URLs
-    local domains_file=$(mktemp)
+    local domains_file="$(mktemp)"
     grep -oE 'https?://[^/]+' "$url_file" | sort | uniq -c | sort -nr > "$domains_file"
+
+    cp "$domains_file" ./domains.txt
     
     echo "Downloads by domain:"
-    head -50 "$domains_file"
+    head -10 "$domains_file"
     
     # Look for patterns in successful vs failed downloads
     #local successful_files=$(find . -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" -o -name "*.gif" -o -name "*.webp" -o -name "*.mp4" -o -name "*.mkv" -o -name "*.avi" | wc -l)
@@ -225,8 +228,8 @@ analyze_failures() {
         echo "- Some domains may require specific headers or authentication"
         echo "- Consider using a VPN or different IP address"
     fi
-    
-    #rm -f "$domains_file"
+
+    rm -f "$domains_file"
 }
 
 # Enhanced version of your original download loop
@@ -234,10 +237,12 @@ enhanced_download_loop() {
     local url_files=("$@")
     
     # Combine all URL files into one deduplicated list
-    local combined_urls=$(mktemp)
+    local combined_urls="$(mktemp)"
     for file in "${url_files[@]}"; do
         [[ -f "$file" ]] && cat "$file"
     done | sort -u > "$combined_urls"
+
+    cp "$combined_urls" ./combined_urls.txt
     
     local total_urls=$(wc -l < "$combined_urls")
     log "Combined $total_urls unique URLs from ${#url_files[@]} files"
@@ -247,6 +252,7 @@ enhanced_download_loop() {
     
     # Cleanup and analysis
     analyze_failures "$combined_urls"
+
     rm -f "$combined_urls"
 }
 
@@ -255,7 +261,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     case "${1:-help}" in
         "download")
             shift
-            enhanced_download_loop "$@"
+            enhanced_download_loop $@
             ;;
         "process-urls")
             [[ $# -ge 2 ]] || { echo "Usage: $0 process-urls <url_file>"; exit 1; }
