@@ -9,9 +9,9 @@ yanimdl_main() {
 
     TIMESTAMP=$(date -u +%s%N)
     JQ_FILTER_1_ENTITIES=".blocks[1].params.adapterData.serpList.items.entities"
-    JQ_FILTER_2_ORIG_URL=".[].origUrl"
-    JQ_FILTER_2_PREVIEW_URL=".[].viewerData.preview.[].url"
-    JQ_FILTER_2_DUPS_URL=".[].viewerData.dups.[].url"
+    JQ_FILTER_2_ORIG_URL="[].origUrl"
+    JQ_FILTER_2_PREVIEW_URL="[].viewerData.preview.[].url"
+    JQ_FILTER_2_DUPS_URL="[].viewerData.dups.[].url"
     PAGE_NUMBER=${PAGE_NUMBER:-1}
     URL_FILES_FILENAME_PREFIX="$1"
     URL_FILES_FILENAME_SUFFIX="$PAGE_NUMBER"
@@ -20,7 +20,7 @@ yanimdl_main() {
     PREVIEW_URLS_FILE_PATH="${URL_FILES_FILENAME_PREFIX}.urls.preview-urls.${TIMESTAMP}.${URL_FILES_FILENAME_SUFFIX}.txt"
     DUPS_URLS_FILE_PATH="${URL_FILES_FILENAME_PREFIX}.urls.dups-urls.${TIMESTAMP}.${URL_FILES_FILENAME_SUFFIX}.txt"
     ALL_URLS_FILE_PATH="${URL_FILES_FILENAME_PREFIX}.urls.all.${TIMESTAMP}.${URL_FILES_FILENAME_SUFFIX}.txt"
-    JSON_OUTPUT_FILE_PATH=${@}
+    JSON_OUTPUT_FILE_PATH="${@}"
     YANIMDL_DL_COMMAND_OUTPUT_LOG_FILE_PATH="yanimdl.dl.log.txt"
 
     for i in $(cat ${JSON_OUTPUT_FILE_PATH} | jq "${JQ_FILTER_1_ENTITIES}${JQ_FILTER_2_ORIG_URL}"); do printf "%s\n" "$i" | jq -r; done | tee -a "${ORIG_URL_FILE_PATH}"
